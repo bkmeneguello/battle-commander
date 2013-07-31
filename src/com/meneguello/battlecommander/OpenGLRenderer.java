@@ -1,5 +1,63 @@
 package com.meneguello.battlecommander;
 
+import static android.opengl.GLES20.GL_COLOR_BUFFER_BIT;
+import static android.opengl.GLES20.GL_COMPILE_STATUS;
+import static android.opengl.GLES20.GL_DEPTH_BUFFER_BIT;
+import static android.opengl.GLES20.GL_DEPTH_TEST;
+import static android.opengl.GLES20.GL_FLOAT;
+import static android.opengl.GLES20.GL_FRAGMENT_SHADER;
+import static android.opengl.GLES20.GL_GENERATE_MIPMAP_HINT;
+import static android.opengl.GLES20.GL_GEQUAL;
+import static android.opengl.GLES20.GL_LINEAR;
+import static android.opengl.GLES20.GL_LINEAR_MIPMAP_LINEAR;
+import static android.opengl.GLES20.GL_LINK_STATUS;
+import static android.opengl.GLES20.GL_NEAREST;
+import static android.opengl.GLES20.GL_NICEST;
+import static android.opengl.GLES20.GL_NO_ERROR;
+import static android.opengl.GLES20.GL_RGB;
+import static android.opengl.GLES20.GL_TEXTURE0;
+import static android.opengl.GLES20.GL_TEXTURE_2D;
+import static android.opengl.GLES20.GL_TEXTURE_MAG_FILTER;
+import static android.opengl.GLES20.GL_TEXTURE_MIN_FILTER;
+import static android.opengl.GLES20.GL_TRIANGLES;
+import static android.opengl.GLES20.GL_UNSIGNED_SHORT;
+import static android.opengl.GLES20.GL_UNSIGNED_SHORT_5_6_5;
+import static android.opengl.GLES20.GL_VERTEX_SHADER;
+import static android.opengl.GLES20.glActiveTexture;
+import static android.opengl.GLES20.glAttachShader;
+import static android.opengl.GLES20.glBindAttribLocation;
+import static android.opengl.GLES20.glBindTexture;
+import static android.opengl.GLES20.glClear;
+import static android.opengl.GLES20.glClearColor;
+import static android.opengl.GLES20.glCompileShader;
+import static android.opengl.GLES20.glCreateProgram;
+import static android.opengl.GLES20.glCreateShader;
+import static android.opengl.GLES20.glDeleteProgram;
+import static android.opengl.GLES20.glDeleteShader;
+import static android.opengl.GLES20.glDepthFunc;
+import static android.opengl.GLES20.glDisableVertexAttribArray;
+import static android.opengl.GLES20.glDrawElements;
+import static android.opengl.GLES20.glEnable;
+import static android.opengl.GLES20.glEnableVertexAttribArray;
+import static android.opengl.GLES20.glGenTextures;
+import static android.opengl.GLES20.glGenerateMipmap;
+import static android.opengl.GLES20.glGetAttribLocation;
+import static android.opengl.GLES20.glGetError;
+import static android.opengl.GLES20.glGetProgramInfoLog;
+import static android.opengl.GLES20.glGetProgramiv;
+import static android.opengl.GLES20.glGetShaderInfoLog;
+import static android.opengl.GLES20.glGetShaderiv;
+import static android.opengl.GLES20.glGetUniformLocation;
+import static android.opengl.GLES20.glHint;
+import static android.opengl.GLES20.glLinkProgram;
+import static android.opengl.GLES20.glShaderSource;
+import static android.opengl.GLES20.glTexParameteri;
+import static android.opengl.GLES20.glUniform1i;
+import static android.opengl.GLES20.glUniformMatrix4fv;
+import static android.opengl.GLES20.glUseProgram;
+import static android.opengl.GLES20.glVertexAttribPointer;
+import static android.opengl.GLES20.glViewport;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,7 +72,7 @@ import javax.microedition.khronos.opengles.GL10;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.opengl.GLES20;
+import android.opengl.ETC1Util;
 import android.opengl.GLSurfaceView.Renderer;
 import android.opengl.GLUtils;
 import android.opengl.Matrix;
@@ -43,25 +101,25 @@ public class OpenGLRenderer implements Renderer {
     private int loadShader(int type, int resourceId) {
         // create a vertex shader type (GLES20.GL_VERTEX_SHADER)
         // or a fragment shader type (GLES20.GL_FRAGMENT_SHADER)
-        int shaderHandle = GLES20.glCreateShader(type);
+        int shaderHandle = glCreateShader(type);
         if (shaderHandle != 0) {
 
             final String shaderCode = readTextFileFromRawResource(resourceId);
 
             // add the source code to the shader and compile it
-            GLES20.glShaderSource(shaderHandle, shaderCode);
+            glShaderSource(shaderHandle, shaderCode);
 
             // Compile the shader.
-            GLES20.glCompileShader(shaderHandle);
+            glCompileShader(shaderHandle);
 
             // Get the compilation status.
             final int[] compileStatus = new int[1];
-            GLES20.glGetShaderiv(shaderHandle, GLES20.GL_COMPILE_STATUS, compileStatus, 0);
+            glGetShaderiv(shaderHandle, GL_COMPILE_STATUS, compileStatus, 0);
 
             // If the compilation failed, delete the shader.
             if (compileStatus[0] == 0) {
-                Log.e(TAG, "Error compiling shader: " + GLES20.glGetShaderInfoLog(shaderHandle));
-                GLES20.glDeleteShader(shaderHandle);
+                Log.e(TAG, "Error compiling shader: " + glGetShaderInfoLog(shaderHandle));
+                glDeleteShader(shaderHandle);
                 shaderHandle = 0;
             }
         }
@@ -75,34 +133,34 @@ public class OpenGLRenderer implements Renderer {
     }
 
     public int createAndLinkProgram(final int vertResourceId, final int fragResourceId, final String[] attributes) {
-        int programHandle = GLES20.glCreateProgram();
+        int programHandle = glCreateProgram();
 
         if (programHandle != 0) {
             // Bind the vertex shader to the program.
-            GLES20.glAttachShader(programHandle, loadShader(GLES20.GL_VERTEX_SHADER, vertResourceId));
+            glAttachShader(programHandle, loadShader(GL_VERTEX_SHADER, vertResourceId));
 
             // Bind the fragment shader to the program.
-            GLES20.glAttachShader(programHandle, loadShader(GLES20.GL_FRAGMENT_SHADER, fragResourceId));
+            glAttachShader(programHandle, loadShader(GL_FRAGMENT_SHADER, fragResourceId));
 
             // Bind attributes
             if (attributes != null) {
                 final int size = attributes.length;
                 for (int i = 0; i < size; i++) {
-                    GLES20.glBindAttribLocation(programHandle, i, attributes[i]);
+                    glBindAttribLocation(programHandle, i, attributes[i]);
                 }
             }
 
             // Link the two shaders together into a program.
-            GLES20.glLinkProgram(programHandle);
+            glLinkProgram(programHandle);
 
             // Get the link status.
             final int[] linkStatus = new int[1];
-            GLES20.glGetProgramiv(programHandle, GLES20.GL_LINK_STATUS, linkStatus, 0);
+            glGetProgramiv(programHandle, GL_LINK_STATUS, linkStatus, 0);
 
             // If the link failed, delete the program.
             if (linkStatus[0] == 0) {
-                Log.e(TAG, "Error compiling program: " + GLES20.glGetProgramInfoLog(programHandle));
-                GLES20.glDeleteProgram(programHandle);
+                Log.e(TAG, "Error compiling program: " + glGetProgramInfoLog(programHandle));
+                glDeleteProgram(programHandle);
                 programHandle = 0;
             }
         }
@@ -118,7 +176,7 @@ public class OpenGLRenderer implements Renderer {
     public int loadTexture(final int resourceId) {
         final int[] textureHandle = new int[1];
 
-        GLES20.glGenTextures(1, textureHandle, 0);
+        glGenTextures(1, textureHandle, 0);
 
         if (textureHandle[0] != 0) {
             final BitmapFactory.Options options = new BitmapFactory.Options();
@@ -128,26 +186,66 @@ public class OpenGLRenderer implements Renderer {
             final Bitmap bitmap = BitmapFactory.decodeResource(battleCommander.getResources(), resourceId, options);
 
             // Bind to the texture in OpenGL
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureHandle[0]);
+            glBindTexture(GL_TEXTURE_2D, textureHandle[0]);
             checkGlError("glBindTexture");
 
             // Set filtering
-            //GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
-            //GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR_MIPMAP_LINEAR);
+            //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
             checkGlError("glTexParameteri");
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             checkGlError("glTexParameteri");
 
             // Load the bitmap into the bound texture.
-            GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0);
+            GLUtils.texImage2D(GL_TEXTURE_2D, 0, bitmap, 0);
             
-            GLES20.glHint(GLES20.GL_GENERATE_MIPMAP_HINT, GLES20.GL_NICEST);
-            GLES20.glGenerateMipmap(GLES20.GL_TEXTURE_2D);
+            glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
+            glGenerateMipmap(GL_TEXTURE_2D);
             checkGlError("glGenerateMipmap");
 
             // Recycle the bitmap, since its data has been loaded into OpenGL.
             bitmap.recycle();
+        }
+
+        if (textureHandle[0] == 0) {
+        	Log.e(TAG, "loadTexture failed!");
+            throw new RuntimeException("Error loading texture.");
+        }
+
+        return textureHandle[0];
+    }
+
+    public int loadCompressedTexture(final String filename) {
+        final int[] textureHandle = new int[1];
+
+        glGenTextures(1, textureHandle, 0);
+
+        if (textureHandle[0] != 0) {
+            // Bind to the texture in OpenGL
+            glBindTexture(GL_TEXTURE_2D, textureHandle[0]);
+            checkGlError("glBindTexture");
+
+            // Set filtering
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+//            checkGlError("glTexParameteri");
+//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//            checkGlError("glTexParameteri");
+
+            // Load the bitmap into the bound texture.
+            try {
+	            InputStream input = battleCommander.getAssets().open(filename);
+	            ETC1Util.loadTexture(GL_TEXTURE_2D, 0, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, input);
+            } catch(IOException e) {
+            	textureHandle[0] = 0;
+            	Log.e(TAG, "ETC1Util.loadTexture failed!", e);
+            }
+            
+            //glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
+            //glGenerateMipmap(GL_TEXTURE_2D);
+            //checkGlError("glGenerateMipmap");
         }
 
         if (textureHandle[0] == 0) {
@@ -181,7 +279,7 @@ public class OpenGLRenderer implements Renderer {
 
     public void checkGlError(final String glOperation) {
         int error;
-        while ((error = GLES20.glGetError()) != GLES20.GL_NO_ERROR) {
+        while ((error = glGetError()) != GL_NO_ERROR) {
             throw new RuntimeException(glOperation + ": glError " + error);
         }
     }
@@ -189,14 +287,14 @@ public class OpenGLRenderer implements Renderer {
     @Override
     public void onSurfaceCreated(GL10 unused, EGLConfig config) {
         // Set the background frame color
-        GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
         // Use culling to remove back faces.
-        //GLES20.glEnable(GLES20.GL_CULL_FACE);
+        //glEnable(GL_CULL_FACE);
 
         // Enable depth testing
-        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
-        GLES20.glDepthFunc(GLES20.GL_GEQUAL);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_GEQUAL);
 
         // Position the eye in front of the origin.
         final float eyeX =  0.0f;
@@ -224,7 +322,7 @@ public class OpenGLRenderer implements Renderer {
     @Override
     public void onDrawFrame(GL10 unused) {
         // Draw background color
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         //Matrix.translateM(mVMatrix, 0, 0, 0, .1f);      
 
@@ -239,7 +337,7 @@ public class OpenGLRenderer implements Renderer {
     public void onSurfaceChanged(GL10 unused, int width, int height) {
         // Adjust the viewport based on geometry changes,
         // such as screen rotation
-        GLES20.glViewport(0, 0, width, height);
+        glViewport(0, 0, width, height);
 
         //float ratio = (float) width / height;
 
@@ -251,7 +349,7 @@ public class OpenGLRenderer implements Renderer {
     }
 
 	public void drag(float dx, float dy) {
-		Matrix.translateM(mVMatrix, 0, -dx * (1/scale), -dy * (1/scale), 0);
+		Matrix.translateM(mVMatrix, 0, dx * (1/scale), dy * (1/scale), 0);
 	}
 
 	public void zoom(float scaleFactor) {
@@ -261,8 +359,6 @@ public class OpenGLRenderer implements Renderer {
 }
 
 class Square {
-
-    private static final String TAG = "Square";
 
 	private final FloatBuffer vertexBuffer;
 
@@ -319,57 +415,58 @@ class Square {
 
         mProgramHandle = openGLRenderer.createAndLinkProgram(R.raw.unshaded_vert, R.raw.unshaded_frag, new String[] {"a_Position"});//, "a_TexCoordinate"});
 
-        mTextureDataHandle = openGLRenderer.loadTexture(R.raw.map);
+        //mTextureDataHandle = openGLRenderer.loadTexture(R.raw.map);
+        mTextureDataHandle = openGLRenderer.loadCompressedTexture("maps/beach/0/beach_0.pkm");
 
         Matrix.setIdentityM(mMMatrix, 0);
-        Matrix.scaleM(mMMatrix, 0, 512f, 256f, 1f);
+        Matrix.scaleM(mMMatrix, 0, 512f, 512, 1f);
     }
 
     public void draw(float[] mVPMatrix) {
         // Add program to OpenGL environment
-        GLES20.glUseProgram(mProgramHandle);
+        glUseProgram(mProgramHandle);
 
 
         // Calculate the projection and view transformation
         Matrix.multiplyMM(mMVPMatrix, 0, mVPMatrix, 0, mMMatrix, 0);
 
         // Set program handles for cube drawing.
-        int mMVPMatrixHandle = GLES20.glGetUniformLocation(mProgramHandle, "u_MVPMatrix");
+        int mMVPMatrixHandle = glGetUniformLocation(mProgramHandle, "u_MVPMatrix");
         // Pass in the combined matrix.
-        GLES20.glUniformMatrix4fv(mMVPMatrixHandle, 1, false, mMVPMatrix, 0);
+        glUniformMatrix4fv(mMVPMatrixHandle, 1, false, mMVPMatrix, 0);
 
 
-        int mPositionHandle = GLES20.glGetAttribLocation(mProgramHandle, "a_Position");
+        int mPositionHandle = glGetAttribLocation(mProgramHandle, "a_Position");
         // Enable a handle to the triangle vertices
-        GLES20.glEnableVertexAttribArray(mPositionHandle);
+        glEnableVertexAttribArray(mPositionHandle);
         // Prepare the triangle coordinate data
-        GLES20.glVertexAttribPointer(mPositionHandle, 3, GLES20.GL_FLOAT, false, 0, vertexBuffer);
+        glVertexAttribPointer(mPositionHandle, 3, GL_FLOAT, false, 0, vertexBuffer);
 
 
-        int mTextureCoordinateHandle = GLES20.glGetAttribLocation(mProgramHandle, "a_TexCoordinate");
+        int mTextureCoordinateHandle = glGetAttribLocation(mProgramHandle, "a_TexCoordinate");
         // Enable a handle to the triangle vertices
-        GLES20.glEnableVertexAttribArray(mTextureCoordinateHandle);
+        glEnableVertexAttribArray(mTextureCoordinateHandle);
         // Prepare the triangle coordinate data
-        GLES20.glVertexAttribPointer(mTextureCoordinateHandle, 2, GLES20.GL_FLOAT, false, 0, texCoordsBuffer);
+        glVertexAttribPointer(mTextureCoordinateHandle, 2, GL_FLOAT, false, 0, texCoordsBuffer);
 
 
-        int mTextureUniformHandle = GLES20.glGetUniformLocation(mProgramHandle, "u_Texture");
+        int mTextureUniformHandle = glGetUniformLocation(mProgramHandle, "u_Texture");
         // Set the active texture unit to texture unit 0.
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        glActiveTexture(GL_TEXTURE0);
         // Bind the texture to this unit.
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTextureDataHandle);
+        glBindTexture(GL_TEXTURE_2D, mTextureDataHandle);
         // Tell the texture uniform sampler to use this texture in the shader by binding to texture unit 0.
-        GLES20.glUniform1i(mTextureUniformHandle, 0);
+        glUniform1i(mTextureUniformHandle, 0);
 
 
         // Draw the square
-        GLES20.glDrawElements(GLES20.GL_TRIANGLES, drawOrder.length, GLES20.GL_UNSIGNED_SHORT, drawListBuffer);
+        glDrawElements(GL_TRIANGLES, drawOrder.length, GL_UNSIGNED_SHORT, drawListBuffer);
 
 
         // Disable vertex array
-        GLES20.glDisableVertexAttribArray(mPositionHandle);
+        glDisableVertexAttribArray(mPositionHandle);
         // Disable texture coordinates array
-        GLES20.glDisableVertexAttribArray(mTextureCoordinateHandle);
+        glDisableVertexAttribArray(mTextureCoordinateHandle);
     }
 
 }

@@ -1,19 +1,14 @@
 package com.meneguello.battlecommander;
 
 import android.app.Activity;
-import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.view.Window;
 import android.view.WindowManager;
 
 public class BattleCommander extends Activity {
 
-    private static final String TAG = "BattleCommander";
+	private CustomGLSurfaceView view;
     
-	private GLSurfaceView view;
-
-	private OpenGLRenderer renderer;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
     	super.onCreate(savedInstanceState);
@@ -22,10 +17,7 @@ public class BattleCommander extends Activity {
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         view = new CustomGLSurfaceView(this);
-        view.setEGLContextClientVersion(2);
-        renderer = new OpenGLRenderer(this);
-		view.setRenderer(renderer);
-        setContentView(view);
+		setContentView(view);
     }
 
     @Override
@@ -40,13 +32,4 @@ public class BattleCommander extends Activity {
         view.onPause();
     }
 
-	public void drag(float dx, float dy) {
-		//Log.d(TAG, "drag x:" + dx + ", y:" + dy);
-		this.renderer.drag(dx, dy);
-	}
-
-	public void zoom(float scaleFactor) {
-		//Log.d(TAG, "zoom " + scaleFactor);
-		this.renderer.zoom(scaleFactor);
-	}
 }
