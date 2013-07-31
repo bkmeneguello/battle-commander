@@ -1,11 +1,12 @@
 package com.meneguello.battlecommander;
 
 import android.opengl.GLSurfaceView;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 
 public class CustomGLSurfaceView extends GLSurfaceView implements ScaleGestureDetector.OnScaleGestureListener {
+	
+	private static final String TAG = "CustomGLSurfaceView";
 
     private static final int INVALID_POINTER_ID = -1;
 
@@ -21,9 +22,12 @@ public class CustomGLSurfaceView extends GLSurfaceView implements ScaleGestureDe
 
     private float mPosY;
 
-    public CustomGLSurfaceView(BattleCommander context) {
-        super(context);
-        scaleGestureDetector = new ScaleGestureDetector(context, this);
+	private BattleCommander battleCommander;
+
+    public CustomGLSurfaceView(BattleCommander battleCommander) {
+        super(battleCommander);
+		this.battleCommander = battleCommander;
+        scaleGestureDetector = new ScaleGestureDetector(battleCommander, this);
     }
 
     @Override
@@ -33,7 +37,6 @@ public class CustomGLSurfaceView extends GLSurfaceView implements ScaleGestureDe
         final int action = event.getAction();
         switch (action & MotionEvent.ACTION_MASK) {
             case MotionEvent.ACTION_DOWN: {
-                Log.i("Action", "ACTION_DOWN");
                 final float x = event.getX();
                 final float y = event.getY();
 
@@ -44,7 +47,6 @@ public class CustomGLSurfaceView extends GLSurfaceView implements ScaleGestureDe
             }
 
             case MotionEvent.ACTION_MOVE: {
-                Log.i("Action", "ACTION_MOVE");
                 final int pointerIndex = event.findPointerIndex(mActivePointerId);
                 final float x = event.getX(pointerIndex);
                 final float y = event.getY(pointerIndex);
@@ -56,6 +58,8 @@ public class CustomGLSurfaceView extends GLSurfaceView implements ScaleGestureDe
 
                     mPosX += dx;
                     mPosY += dy;
+                    
+                    battleCommander.drag(dx, dy);
 
                     invalidate();
                 }
@@ -67,19 +71,16 @@ public class CustomGLSurfaceView extends GLSurfaceView implements ScaleGestureDe
             }
 
             case MotionEvent.ACTION_UP: {
-                Log.i("Action", "ACTION_UP");
                 mActivePointerId = INVALID_POINTER_ID;
                 break;
             }
 
             case MotionEvent.ACTION_CANCEL: {
-                Log.i("Action", "ACTION_CANCEL");
                 mActivePointerId = INVALID_POINTER_ID;
                 break;
             }
 
             case MotionEvent.ACTION_POINTER_UP: {
-                Log.i("Action", "ACTION_POINTER_UP");
                 final int pointerIndex = (event.getAction() & MotionEvent.ACTION_POINTER_INDEX_MASK) >> MotionEvent.ACTION_POINTER_INDEX_SHIFT;
                 final int pointerId = event.getPointerId(pointerIndex);
                 if (pointerId == mActivePointerId) {
@@ -93,25 +94,24 @@ public class CustomGLSurfaceView extends GLSurfaceView implements ScaleGestureDe
                 break;
             }
         }
-
+        
         return true;
     }
-
+    
     @Override
     public boolean onScale(ScaleGestureDetector scaleGestureDetector) {
-        Log.i("Scale", "onScale");
+        battleCommander.zoom(scaleGestureDetector.getScaleFactor());
         return true;
     }
 
     @Override
     public boolean onScaleBegin(ScaleGestureDetector scaleGestureDetector) {
-        Log.i("Scale", "onScaleBegin");
         return true;
     }
 
     @Override
     public void onScaleEnd(ScaleGestureDetector scaleGestureDetector) {
-        Log.i("Scale", "onScaleEnd");
+        
     }
 
 }

@@ -8,20 +8,23 @@ import android.view.WindowManager;
 
 public class BattleCommander extends Activity {
 
-    private GLSurfaceView view;
+    private static final String TAG = "BattleCommander";
+    
+	private GLSurfaceView view;
+
+	private OpenGLRenderer renderer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    	super.onCreate(savedInstanceState);
 
         this.requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         view = new CustomGLSurfaceView(this);
         view.setEGLContextClientVersion(2);
-//        view.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
-//        view.getPreserveEGLContextOnPause(); //TODO: API 11
-        view.setRenderer(new OpenGLRenderer(this));
+        renderer = new OpenGLRenderer(this);
+		view.setRenderer(renderer);
         setContentView(view);
     }
 
@@ -36,4 +39,14 @@ public class BattleCommander extends Activity {
         super.onPause();
         view.onPause();
     }
+
+	public void drag(float dx, float dy) {
+		//Log.d(TAG, "drag x:" + dx + ", y:" + dy);
+		this.renderer.drag(dx, dy);
+	}
+
+	public void zoom(float scaleFactor) {
+		//Log.d(TAG, "zoom " + scaleFactor);
+		this.renderer.zoom(scaleFactor);
+	}
 }

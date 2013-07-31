@@ -1,14 +1,5 @@
 package com.meneguello.battlecommander;
 
-import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.opengl.GLES20;
-import android.opengl.GLSurfaceView.Renderer;
-import android.opengl.GLUtils;
-import android.opengl.Matrix;
-import android.util.Log;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,22 +12,32 @@ import java.nio.ShortBuffer;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.opengl.GLES20;
+import android.opengl.GLSurfaceView.Renderer;
+import android.opengl.GLUtils;
+import android.opengl.Matrix;
+import android.util.Log;
+
 public class OpenGLRenderer implements Renderer {
 
     private static final String TAG = "OpenGLRenderer";
+    
+    private final BattleCommander battleCommander;
 
     private final float[] mVPMatrix = new float[16];
 
     private final float[] mProjMatrix = new float[16];
 
     private final float[] mVMatrix = new float[16];
-
-    private final Context context;
+    
+    private float scale = 1;
 
     private Square mSquare;
 
-    public OpenGLRenderer(final Context activityContext) {
-        context = activityContext;
+    public OpenGLRenderer(BattleCommander battleCommander) {
+        this.battleCommander = battleCommander;
     }
 
     private int loadShader(int type, int resourceId) {
@@ -66,14 +67,14 @@ public class OpenGLRenderer implements Renderer {
         }
 
         if (shaderHandle == 0)  {
+            Log.e(TAG, "loadShader failed!");
             throw new RuntimeException("Error creating shader.");
         }
-
+        
         return shaderHandle;
     }
 
     public int createAndLinkProgram(final int vertResourceId, final int fragResourceId, final String[] attributes) {
-
         int programHandle = GLES20.glCreateProgram();
 
         if (programHandle != 0) {
@@ -107,14 +108,14 @@ public class OpenGLRenderer implements Renderer {
         }
 
         if (programHandle == 0) {
+        	Log.e(TAG, "createAndLinkProgram failed!");
             throw new RuntimeException("Error creating program.");
         }
-
+        
         return programHandle;
     }
 
     public int loadTexture(final int resourceId) {
-
         final int[] textureHandle = new int[1];
 
         GLES20.glGenTextures(1, textureHandle, 0);
@@ -124,23 +125,33 @@ public class OpenGLRenderer implements Renderer {
             options.inScaled = false;   // No pre-scaling
 
             // Read in the resource
-            final Bitmap bitmap = BitmapFactory.decodeResource(context.getResources(), resourceId, options);
+            final Bitmap bitmap = BitmapFactory.decodeResource(battleCommander.getResources(), resourceId, options);
 
             // Bind to the texture in OpenGL
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureHandle[0]);
+            checkGlError("glBindTexture");
 
             // Set filtering
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+            //GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
+            //GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR_MIPMAP_LINEAR);
+            checkGlError("glTexParameteri");
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+            checkGlError("glTexParameteri");
 
             // Load the bitmap into the bound texture.
             GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0);
+            
+            GLES20.glHint(GLES20.GL_GENERATE_MIPMAP_HINT, GLES20.GL_NICEST);
+            GLES20.glGenerateMipmap(GLES20.GL_TEXTURE_2D);
+            checkGlError("glGenerateMipmap");
 
             // Recycle the bitmap, since its data has been loaded into OpenGL.
             bitmap.recycle();
         }
 
         if (textureHandle[0] == 0) {
+        	Log.e(TAG, "loadTexture failed!");
             throw new RuntimeException("Error loading texture.");
         }
 
@@ -148,7 +159,7 @@ public class OpenGLRenderer implements Renderer {
     }
 
     public String readTextFileFromRawResource(final int resourceId) {
-        final InputStream inputStream = context.getResources().openRawResource(resourceId);
+        final InputStream inputStream = battleCommander.getResources().openRawResource(resourceId);
         final InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
         final BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
 
@@ -161,24 +172,13 @@ public class OpenGLRenderer implements Renderer {
                 body.append('\n');
             }
         } catch (IOException e) {
+        	Log.e(TAG, "readTextFileFromRawResource failed!");
             return null;
         }
-
+        
         return body.toString();
     }
 
-    /**
-     * Utility method for debugging OpenGL calls. Provide the name of the call
-     * just after making it:
-     * <p/>
-     * <pre>
-     * mColorHandle = GLES20.glGetUniformLocation(mProgramHandle, "vColor");
-     * MyGLRenderer.checkGlError("glGetUniformLocation");</pre>
-     *
-     * If the operation is not successful, the check throws an error.
-     *
-     * @param glOperation - Name of the OpenGL call to check.
-     */
     public void checkGlError(final String glOperation) {
         int error;
         while ((error = GLES20.glGetError()) != GLES20.GL_NO_ERROR) {
@@ -196,11 +196,12 @@ public class OpenGLRenderer implements Renderer {
 
         // Enable depth testing
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+        GLES20.glDepthFunc(GLES20.GL_GEQUAL);
 
         // Position the eye in front of the origin.
         final float eyeX =  0.0f;
         final float eyeY =  0.0f;
-        final float eyeZ = -1.0f;
+        final float eyeZ = -2.0f;
 
         // We are looking toward the distance
         final float lookX = 0.0f;
@@ -225,7 +226,7 @@ public class OpenGLRenderer implements Renderer {
         // Draw background color
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
 
-        //Matrix.translateM(mVMatrix, 0, 0, 0, .1f);
+        //Matrix.translateM(mVMatrix, 0, 0, 0, .1f);      
 
         // Calculate the projection and view transformation
         Matrix.multiplyMM(mVPMatrix, 0, mProjMatrix, 0, mVMatrix, 0);
@@ -244,15 +245,26 @@ public class OpenGLRenderer implements Renderer {
 
         // this projection matrix is applied to object coordinates
         // in the onDrawFrame() method
-        //Matrix.frustumM(mProjMatrix, 0, -ratio, ratio, -1, 1, 3, 70);
+        //Matrix.frustumM(mProjMatrix, 0, -ratio, ratio, -1, 1, 1, 2);
 
         Matrix.orthoM(mProjMatrix, 0, -(width/2), width/2, -(height/2), height/2, 0, 2);
     }
+
+	public void drag(float dx, float dy) {
+		Matrix.translateM(mVMatrix, 0, -dx * (1/scale), -dy * (1/scale), 0);
+	}
+
+	public void zoom(float scaleFactor) {
+		scale *= scaleFactor;
+		Matrix.scaleM(mProjMatrix, 0, scaleFactor, scaleFactor, 1);
+	}
 }
 
 class Square {
 
-    private final FloatBuffer vertexBuffer;
+    private static final String TAG = "Square";
+
+	private final FloatBuffer vertexBuffer;
 
     private final FloatBuffer texCoordsBuffer;
 
@@ -278,9 +290,9 @@ class Square {
             0, 2, 3
     }; // order to draw vertices
 
-    private final int mProgramHandle;
+    private int mProgramHandle;
 
-    private int mTextureDataHandle;
+    private final int mTextureDataHandle;
 
     private final float[] mMVPMatrix = new float[16];
 
@@ -305,12 +317,12 @@ class Square {
         drawListBuffer.put(drawOrder);
         drawListBuffer.position(0);
 
-        mProgramHandle = openGLRenderer.createAndLinkProgram(R.raw.unshaded_vert, R.raw.unshaded_frag, new String[] {"a_Position", "a_TexCoordinate"});
+        mProgramHandle = openGLRenderer.createAndLinkProgram(R.raw.unshaded_vert, R.raw.unshaded_frag, new String[] {"a_Position"});//, "a_TexCoordinate"});
 
         mTextureDataHandle = openGLRenderer.loadTexture(R.raw.map);
 
         Matrix.setIdentityM(mMMatrix, 0);
-        Matrix.scaleM(mMMatrix, 0, 750f, 494f, 1f);
+        Matrix.scaleM(mMMatrix, 0, 512f, 256f, 1f);
     }
 
     public void draw(float[] mVPMatrix) {
