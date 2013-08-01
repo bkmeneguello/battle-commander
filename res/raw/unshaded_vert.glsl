@@ -1,11 +1,11 @@
-uniform mat4 u_MVPMatrix;
+uniform mat4 modelViewProjection;
 
-attribute highp vec4 a_Position;
-attribute mediump vec2 a_TexCoordinate;
+attribute vec4 vertex;
+attribute vec2 texCoord;
 
-varying mediump vec2 v_TexCoordinate;
+varying vec2 _texCoord;
 
 void main() {
-    v_TexCoordinate = a_TexCoordinate;
-    gl_Position = u_MVPMatrix * a_Position;
+    _texCoord = texCoord;
+    gl_Position = modelViewProjection * vertex;
 }

@@ -11,9 +11,7 @@ import static android.opengl.GLES20.GL_GEQUAL;
 import static android.opengl.GLES20.GL_LINEAR;
 import static android.opengl.GLES20.GL_LINEAR_MIPMAP_LINEAR;
 import static android.opengl.GLES20.GL_LINK_STATUS;
-import static android.opengl.GLES20.GL_NEAREST;
 import static android.opengl.GLES20.GL_NICEST;
-import static android.opengl.GLES20.GL_NO_ERROR;
 import static android.opengl.GLES20.GL_RGB;
 import static android.opengl.GLES20.GL_TEXTURE0;
 import static android.opengl.GLES20.GL_TEXTURE_2D;
@@ -42,7 +40,6 @@ import static android.opengl.GLES20.glEnableVertexAttribArray;
 import static android.opengl.GLES20.glGenTextures;
 import static android.opengl.GLES20.glGenerateMipmap;
 import static android.opengl.GLES20.glGetAttribLocation;
-import static android.opengl.GLES20.glGetError;
 import static android.opengl.GLES20.glGetProgramInfoLog;
 import static android.opengl.GLES20.glGetProgramiv;
 import static android.opengl.GLES20.glGetShaderInfoLog;
@@ -84,39 +81,33 @@ public class OpenGLRenderer implements Renderer {
     
     private final BattleCommander battleCommander;
 
-    private final float[] mVPMatrix = new float[16];
+    private final float[] viewProjectionMatrix = new float[16];
 
-    private final float[] mProjMatrix = new float[16];
+    private final float[] projectionMatrix = new float[16];
 
-    private final float[] mVMatrix = new float[16];
+    private final float[] viewMatrix = new float[16];
     
     private float scale = 1;
 
-    private Square mSquare;
+    private Plane plane;
 
     public OpenGLRenderer(BattleCommander battleCommander) {
         this.battleCommander = battleCommander;
     }
 
     private int loadShader(int type, int resourceId) {
-        // create a vertex shader type (GLES20.GL_VERTEX_SHADER)
-        // or a fragment shader type (GLES20.GL_FRAGMENT_SHADER)
         int shaderHandle = glCreateShader(type);
+        
         if (shaderHandle != 0) {
-
             final String shaderCode = readTextFileFromRawResource(resourceId);
 
-            // add the source code to the shader and compile it
             glShaderSource(shaderHandle, shaderCode);
 
-            // Compile the shader.
             glCompileShader(shaderHandle);
 
-            // Get the compilation status.
             final int[] compileStatus = new int[1];
             glGetShaderiv(shaderHandle, GL_COMPILE_STATUS, compileStatus, 0);
 
-            // If the compilation failed, delete the shader.
             if (compileStatus[0] == 0) {
                 Log.e(TAG, "Error compiling shader: " + glGetShaderInfoLog(shaderHandle));
                 glDeleteShader(shaderHandle);
@@ -136,13 +127,10 @@ public class OpenGLRenderer implements Renderer {
         int programHandle = glCreateProgram();
 
         if (programHandle != 0) {
-            // Bind the vertex shader to the program.
             glAttachShader(programHandle, loadShader(GL_VERTEX_SHADER, vertResourceId));
 
-            // Bind the fragment shader to the program.
             glAttachShader(programHandle, loadShader(GL_FRAGMENT_SHADER, fragResourceId));
 
-            // Bind attributes
             if (attributes != null) {
                 final int size = attributes.length;
                 for (int i = 0; i < size; i++) {
@@ -150,14 +138,11 @@ public class OpenGLRenderer implements Renderer {
                 }
             }
 
-            // Link the two shaders together into a program.
             glLinkProgram(programHandle);
 
-            // Get the link status.
             final int[] linkStatus = new int[1];
             glGetProgramiv(programHandle, GL_LINK_STATUS, linkStatus, 0);
 
-            // If the link failed, delete the program.
             if (linkStatus[0] == 0) {
                 Log.e(TAG, "Error compiling program: " + glGetProgramInfoLog(programHandle));
                 glDeleteProgram(programHandle);
@@ -182,29 +167,20 @@ public class OpenGLRenderer implements Renderer {
             final BitmapFactory.Options options = new BitmapFactory.Options();
             options.inScaled = false;   // No pre-scaling
 
-            // Read in the resource
             final Bitmap bitmap = BitmapFactory.decodeResource(battleCommander.getResources(), resourceId, options);
 
-            // Bind to the texture in OpenGL
             glBindTexture(GL_TEXTURE_2D, textureHandle[0]);
-            checkGlError("glBindTexture");
 
-            // Set filtering
             //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            checkGlError("glTexParameteri");
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            checkGlError("glTexParameteri");
 
-            // Load the bitmap into the bound texture.
             GLUtils.texImage2D(GL_TEXTURE_2D, 0, bitmap, 0);
             
             glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
             glGenerateMipmap(GL_TEXTURE_2D);
-            checkGlError("glGenerateMipmap");
 
-            // Recycle the bitmap, since its data has been loaded into OpenGL.
             bitmap.recycle();
         }
 
@@ -222,19 +198,13 @@ public class OpenGLRenderer implements Renderer {
         glGenTextures(1, textureHandle, 0);
 
         if (textureHandle[0] != 0) {
-            // Bind to the texture in OpenGL
             glBindTexture(GL_TEXTURE_2D, textureHandle[0]);
-            checkGlError("glBindTexture");
 
-            // Set filtering
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 //            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-//            checkGlError("glTexParameteri");
 //            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//            checkGlError("glTexParameteri");
 
-            // Load the bitmap into the bound texture.
             try {
 	            InputStream input = battleCommander.getAssets().open(filename);
 	            ETC1Util.loadTexture(GL_TEXTURE_2D, 0, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, input);
@@ -245,7 +215,6 @@ public class OpenGLRenderer implements Renderer {
             
             //glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
             //glGenerateMipmap(GL_TEXTURE_2D);
-            //checkGlError("glGenerateMipmap");
         }
 
         if (textureHandle[0] == 0) {
@@ -277,22 +246,12 @@ public class OpenGLRenderer implements Renderer {
         return body.toString();
     }
 
-    public void checkGlError(final String glOperation) {
-        int error;
-        while ((error = glGetError()) != GL_NO_ERROR) {
-            throw new RuntimeException(glOperation + ": glError " + error);
-        }
-    }
-
     @Override
     public void onSurfaceCreated(GL10 unused, EGLConfig config) {
-        // Set the background frame color
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-
-        // Use culling to remove back faces.
+        
         //glEnable(GL_CULL_FACE);
 
-        // Enable depth testing
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_GEQUAL);
 
@@ -311,162 +270,131 @@ public class OpenGLRenderer implements Renderer {
         final float upY = 1.0f;
         final float upZ = 0.0f;
 
-        // Set the view matrix. This matrix can be said to represent the camera position.
-        // NOTE: In OpenGL 1, a ModelView matrix is used, which is a combination of a model and
-        // view matrix. In OpenGL 2, we can keep track of these matrices separately if we choose.
-        Matrix.setLookAtM(mVMatrix, 0, eyeX, eyeY, eyeZ, lookX, lookY, lookZ, upX, upY, upZ);
+        Matrix.setLookAtM(viewMatrix, 0, eyeX, eyeY, eyeZ, lookX, lookY, lookZ, upX, upY, upZ);
 
-        mSquare = new Square(this);
+        plane = new Plane(this);
     }
 
     @Override
     public void onDrawFrame(GL10 unused) {
-        // Draw background color
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        //Matrix.translateM(mVMatrix, 0, 0, 0, .1f);      
+        Matrix.multiplyMM(viewProjectionMatrix, 0, projectionMatrix, 0, viewMatrix, 0);
 
-        // Calculate the projection and view transformation
-        Matrix.multiplyMM(mVPMatrix, 0, mProjMatrix, 0, mVMatrix, 0);
-
-        // Draw square
-        mSquare.draw(mVPMatrix);
+        plane.draw(viewProjectionMatrix);
     }
 
     @Override
     public void onSurfaceChanged(GL10 unused, int width, int height) {
-        // Adjust the viewport based on geometry changes,
-        // such as screen rotation
         glViewport(0, 0, width, height);
-
-        //float ratio = (float) width / height;
-
-        // this projection matrix is applied to object coordinates
-        // in the onDrawFrame() method
-        //Matrix.frustumM(mProjMatrix, 0, -ratio, ratio, -1, 1, 1, 2);
-
-        Matrix.orthoM(mProjMatrix, 0, -(width/2), width/2, -(height/2), height/2, 0, 2);
+        
+        Matrix.orthoM(projectionMatrix, 0, -(width/2), width/2, -(height/2), height/2, 0, 2);
     }
 
 	public void drag(float dx, float dy) {
-		Matrix.translateM(mVMatrix, 0, dx * (1/scale), dy * (1/scale), 0);
+		Matrix.translateM(viewMatrix, 0, dx * (1/scale), dy * (1/scale), 0);
 	}
 
 	public void zoom(float scaleFactor) {
 		scale *= scaleFactor;
-		Matrix.scaleM(mProjMatrix, 0, scaleFactor, scaleFactor, 1);
+		Matrix.scaleM(projectionMatrix, 0, scaleFactor, scaleFactor, 1);
 	}
 }
 
-class Square {
+class Plane {
 
-	private final FloatBuffer vertexBuffer;
-
-    private final FloatBuffer texCoordsBuffer;
-
-    private final ShortBuffer drawListBuffer;
-
-    private final float squareCoords[] = {
-            -0.5f, -0.5f, 0.0f,   // top left
-            -0.5f,  0.5f, 0.0f,   // bottom left
-             0.5f,  0.5f, 0.0f,   // bottom right
-             0.5f, -0.5f, 0.0f    // top right
+    private static final float vertexCoords[] = {
+            -0.5f, -0.5f, 0.0f,
+            -0.5f,  0.5f, 0.0f,
+             0.5f,  0.5f, 0.0f,
+             0.5f, -0.5f, 0.0f
     };
 
-    private final float textCoords[] = {
+    private static final float textureCoords[] = {
             1.0f, 1.0f,
             1.0f, 0.0f,
             0.0f, 0.0f,
             0.0f, 1.0f,
     };
 
-    //private final short drawOrder[] = {3, 2, 0, 2, 1, 0}; // order to draw vertices
     private final short drawOrder[] = {
             0, 1, 2,
             0, 2, 3
-    }; // order to draw vertices
+    };
 
-    private int mProgramHandle;
+	private final FloatBuffer vertexBuffer;
 
-    private final int mTextureDataHandle;
+    private final FloatBuffer textureCoordsBuffer;
 
-    private final float[] mMVPMatrix = new float[16];
+    private final ShortBuffer drawListBuffer;
 
-    private final float[] mMMatrix = new float[16];
+    private final int programHandle;
 
-    public Square(OpenGLRenderer openGLRenderer) {
-        final ByteBuffer bb = ByteBuffer.allocateDirect(squareCoords.length * 4);
-        bb.order(ByteOrder.nativeOrder());
-        vertexBuffer = bb.asFloatBuffer();
-        vertexBuffer.put(squareCoords);
+    private final int textureHandle;
+
+    private final float[] modelViewProjectionMatrix = new float[16];
+
+    private final float[] modelMatrix = new float[16];
+
+    public Plane(OpenGLRenderer openGLRenderer) {
+        final ByteBuffer vertexByteBuffer = ByteBuffer.allocateDirect(vertexCoords.length * 4);
+        vertexByteBuffer.order(ByteOrder.nativeOrder());
+        vertexBuffer = vertexByteBuffer.asFloatBuffer();
+        vertexBuffer.put(vertexCoords);
         vertexBuffer.position(0);
 
-        final ByteBuffer bb2 = ByteBuffer.allocateDirect(textCoords.length * 4);
-        bb2.order(ByteOrder.nativeOrder());
-        texCoordsBuffer = bb2.asFloatBuffer();
-        texCoordsBuffer.put(textCoords);
-        texCoordsBuffer.position(0);
+        final ByteBuffer textureByteBuffer = ByteBuffer.allocateDirect(textureCoords.length * 4);
+        textureByteBuffer.order(ByteOrder.nativeOrder());
+        textureCoordsBuffer = textureByteBuffer.asFloatBuffer();
+        textureCoordsBuffer.put(textureCoords);
+        textureCoordsBuffer.position(0);
 
-        final ByteBuffer dlb = ByteBuffer.allocateDirect(drawOrder.length * 2);
-        dlb.order(ByteOrder.nativeOrder());
-        drawListBuffer = dlb.asShortBuffer();
+        final ByteBuffer drawOrderByteBuffer = ByteBuffer.allocateDirect(drawOrder.length * 2);
+        drawOrderByteBuffer.order(ByteOrder.nativeOrder());
+        drawListBuffer = drawOrderByteBuffer.asShortBuffer();
         drawListBuffer.put(drawOrder);
         drawListBuffer.position(0);
 
-        mProgramHandle = openGLRenderer.createAndLinkProgram(R.raw.unshaded_vert, R.raw.unshaded_frag, new String[] {"a_Position"});//, "a_TexCoordinate"});
+        programHandle = openGLRenderer.createAndLinkProgram(R.raw.unshaded_vert, R.raw.unshaded_frag, new String[] {"a_Position"});//, "a_TexCoordinate"});
 
         //mTextureDataHandle = openGLRenderer.loadTexture(R.raw.map);
-        mTextureDataHandle = openGLRenderer.loadCompressedTexture("maps/beach/0/beach_0.pkm");
+        textureHandle = openGLRenderer.loadCompressedTexture("maps/beach/0/beach_0.pkm");
 
-        Matrix.setIdentityM(mMMatrix, 0);
-        Matrix.scaleM(mMMatrix, 0, 512f, 512, 1f);
+        Matrix.setIdentityM(modelMatrix, 0);
+        Matrix.scaleM(modelMatrix, 0, 512f, 512, 1f);
     }
 
     public void draw(float[] mVPMatrix) {
-        // Add program to OpenGL environment
-        glUseProgram(mProgramHandle);
+        glUseProgram(programHandle);
 
 
-        // Calculate the projection and view transformation
-        Matrix.multiplyMM(mMVPMatrix, 0, mVPMatrix, 0, mMMatrix, 0);
+        Matrix.multiplyMM(modelViewProjectionMatrix, 0, mVPMatrix, 0, modelMatrix, 0);
 
-        // Set program handles for cube drawing.
-        int mMVPMatrixHandle = glGetUniformLocation(mProgramHandle, "u_MVPMatrix");
-        // Pass in the combined matrix.
-        glUniformMatrix4fv(mMVPMatrixHandle, 1, false, mMVPMatrix, 0);
+        int modelViewProjectionMatrixHandle = glGetUniformLocation(programHandle, "modelViewProjection");
+        glUniformMatrix4fv(modelViewProjectionMatrixHandle, 1, false, modelViewProjectionMatrix, 0);
 
 
-        int mPositionHandle = glGetAttribLocation(mProgramHandle, "a_Position");
-        // Enable a handle to the triangle vertices
-        glEnableVertexAttribArray(mPositionHandle);
-        // Prepare the triangle coordinate data
-        glVertexAttribPointer(mPositionHandle, 3, GL_FLOAT, false, 0, vertexBuffer);
+        int vertexHandle = glGetAttribLocation(programHandle, "vertex");
+        glEnableVertexAttribArray(vertexHandle);
+        glVertexAttribPointer(vertexHandle, 3, GL_FLOAT, false, 0, vertexBuffer);
 
 
-        int mTextureCoordinateHandle = glGetAttribLocation(mProgramHandle, "a_TexCoordinate");
-        // Enable a handle to the triangle vertices
-        glEnableVertexAttribArray(mTextureCoordinateHandle);
-        // Prepare the triangle coordinate data
-        glVertexAttribPointer(mTextureCoordinateHandle, 2, GL_FLOAT, false, 0, texCoordsBuffer);
+        int texCoordHandle = glGetAttribLocation(programHandle, "texCoord");
+        glEnableVertexAttribArray(texCoordHandle);
+        glVertexAttribPointer(texCoordHandle, 2, GL_FLOAT, false, 0, textureCoordsBuffer);
 
 
-        int mTextureUniformHandle = glGetUniformLocation(mProgramHandle, "u_Texture");
-        // Set the active texture unit to texture unit 0.
+        int textureUniformHandle = glGetUniformLocation(programHandle, "texture");
         glActiveTexture(GL_TEXTURE0);
-        // Bind the texture to this unit.
-        glBindTexture(GL_TEXTURE_2D, mTextureDataHandle);
-        // Tell the texture uniform sampler to use this texture in the shader by binding to texture unit 0.
-        glUniform1i(mTextureUniformHandle, 0);
+        glBindTexture(GL_TEXTURE_2D, textureHandle);
+        glUniform1i(textureUniformHandle, 0);
 
 
-        // Draw the square
         glDrawElements(GL_TRIANGLES, drawOrder.length, GL_UNSIGNED_SHORT, drawListBuffer);
 
 
-        // Disable vertex array
-        glDisableVertexAttribArray(mPositionHandle);
-        // Disable texture coordinates array
-        glDisableVertexAttribArray(mTextureCoordinateHandle);
+        glDisableVertexAttribArray(vertexHandle);
+        glDisableVertexAttribArray(texCoordHandle);
     }
 
 }
