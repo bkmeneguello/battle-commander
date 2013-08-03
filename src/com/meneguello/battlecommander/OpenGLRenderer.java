@@ -1,58 +1,17 @@
 package com.meneguello.battlecommander;
 
 import static android.opengl.GLES20.GL_COLOR_BUFFER_BIT;
-import static android.opengl.GLES20.GL_COMPILE_STATUS;
 import static android.opengl.GLES20.GL_DEPTH_BUFFER_BIT;
 import static android.opengl.GLES20.GL_DEPTH_TEST;
-import static android.opengl.GLES20.GL_FLOAT;
-import static android.opengl.GLES20.GL_FRAGMENT_SHADER;
-import static android.opengl.GLES20.GL_GENERATE_MIPMAP_HINT;
 import static android.opengl.GLES20.GL_GEQUAL;
-import static android.opengl.GLES20.GL_LINEAR;
-import static android.opengl.GLES20.GL_LINEAR_MIPMAP_LINEAR;
-import static android.opengl.GLES20.GL_LINK_STATUS;
-import static android.opengl.GLES20.GL_NICEST;
-import static android.opengl.GLES20.GL_RGB;
 import static android.opengl.GLES20.GL_TEXTURE0;
-import static android.opengl.GLES20.GL_TEXTURE_2D;
-import static android.opengl.GLES20.GL_TEXTURE_MAG_FILTER;
-import static android.opengl.GLES20.GL_TEXTURE_MIN_FILTER;
 import static android.opengl.GLES20.GL_TRIANGLES;
 import static android.opengl.GLES20.GL_UNSIGNED_SHORT;
-import static android.opengl.GLES20.GL_UNSIGNED_SHORT_5_6_5;
-import static android.opengl.GLES20.GL_VERTEX_SHADER;
-import static android.opengl.GLES20.glActiveTexture;
-import static android.opengl.GLES20.glAttachShader;
-import static android.opengl.GLES20.glBindAttribLocation;
-import static android.opengl.GLES20.glBindTexture;
 import static android.opengl.GLES20.glClear;
 import static android.opengl.GLES20.glClearColor;
-import static android.opengl.GLES20.glCompileShader;
-import static android.opengl.GLES20.glCreateProgram;
-import static android.opengl.GLES20.glCreateShader;
-import static android.opengl.GLES20.glDeleteProgram;
-import static android.opengl.GLES20.glDeleteShader;
 import static android.opengl.GLES20.glDepthFunc;
-import static android.opengl.GLES20.glDisableVertexAttribArray;
 import static android.opengl.GLES20.glDrawElements;
 import static android.opengl.GLES20.glEnable;
-import static android.opengl.GLES20.glEnableVertexAttribArray;
-import static android.opengl.GLES20.glGenTextures;
-import static android.opengl.GLES20.glGenerateMipmap;
-import static android.opengl.GLES20.glGetAttribLocation;
-import static android.opengl.GLES20.glGetProgramInfoLog;
-import static android.opengl.GLES20.glGetProgramiv;
-import static android.opengl.GLES20.glGetShaderInfoLog;
-import static android.opengl.GLES20.glGetShaderiv;
-import static android.opengl.GLES20.glGetUniformLocation;
-import static android.opengl.GLES20.glHint;
-import static android.opengl.GLES20.glLinkProgram;
-import static android.opengl.GLES20.glShaderSource;
-import static android.opengl.GLES20.glTexParameteri;
-import static android.opengl.GLES20.glUniform1i;
-import static android.opengl.GLES20.glUniformMatrix4fv;
-import static android.opengl.GLES20.glUseProgram;
-import static android.opengl.GLES20.glVertexAttribPointer;
 import static android.opengl.GLES20.glViewport;
 
 import java.io.BufferedReader;
@@ -67,13 +26,13 @@ import java.nio.ShortBuffer;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.opengl.ETC1Util;
 import android.opengl.GLSurfaceView.Renderer;
-import android.opengl.GLUtils;
 import android.opengl.Matrix;
 import android.util.Log;
+
+import com.meneguello.battlecommander.gl.GLSLProgram;
+import com.meneguello.battlecommander.gl.GLSLShader;
+import com.meneguello.battlecommander.gl.Texture;
 
 public class OpenGLRenderer implements Renderer {
 
@@ -95,134 +54,57 @@ public class OpenGLRenderer implements Renderer {
         this.battleCommander = battleCommander;
     }
 
-    private int loadShader(int type, int resourceId) {
-        int shaderHandle = glCreateShader(type);
-        
-        if (shaderHandle != 0) {
-            final String shaderCode = readTextFileFromRawResource(resourceId);
+    private GLSLShader loadShader(int type, int resourceId) {
+    	final String shaderCode = readTextFileFromRawResource(resourceId);
+    	
+        final GLSLShader shader = new GLSLShader(type, shaderCode);
+        shader.compile();
 
-            glShaderSource(shaderHandle, shaderCode);
-
-            glCompileShader(shaderHandle);
-
-            final int[] compileStatus = new int[1];
-            glGetShaderiv(shaderHandle, GL_COMPILE_STATUS, compileStatus, 0);
-
-            if (compileStatus[0] == 0) {
-                Log.e(TAG, "Error compiling shader: " + glGetShaderInfoLog(shaderHandle));
-                glDeleteShader(shaderHandle);
-                shaderHandle = 0;
-            }
-        }
-
-        if (shaderHandle == 0)  {
-            Log.e(TAG, "loadShader failed!");
-            throw new RuntimeException("Error creating shader.");
-        }
-        
-        return shaderHandle;
+        return shader;
     }
 
-    public int createAndLinkProgram(final int vertResourceId, final int fragResourceId, final String[] attributes) {
-        int programHandle = glCreateProgram();
+    public GLSLProgram createProgram(final int vertResourceId, final int fragResourceId, final String[] attributes) {
+        final GLSLProgram program = new GLSLProgram();
 
-        if (programHandle != 0) {
-            glAttachShader(programHandle, loadShader(GL_VERTEX_SHADER, vertResourceId));
-
-            glAttachShader(programHandle, loadShader(GL_FRAGMENT_SHADER, fragResourceId));
-
-            if (attributes != null) {
-                final int size = attributes.length;
-                for (int i = 0; i < size; i++) {
-                    glBindAttribLocation(programHandle, i, attributes[i]);
-                }
-            }
-
-            glLinkProgram(programHandle);
-
-            final int[] linkStatus = new int[1];
-            glGetProgramiv(programHandle, GL_LINK_STATUS, linkStatus, 0);
-
-            if (linkStatus[0] == 0) {
-                Log.e(TAG, "Error compiling program: " + glGetProgramInfoLog(programHandle));
-                glDeleteProgram(programHandle);
-                programHandle = 0;
+        program.attachShader(loadShader(GLSLShader.VERTEX_SHADER, vertResourceId));
+        program.attachShader(loadShader(GLSLShader.FRAGMENT_SHADER, fragResourceId));
+        
+        if (attributes != null) {
+            final int size = attributes.length;
+            for (int i = 0; i < size; i++) {
+                program.bindAttributeLocation(i, attributes[i]);
             }
         }
 
-        if (programHandle == 0) {
-        	Log.e(TAG, "createAndLinkProgram failed!");
-            throw new RuntimeException("Error creating program.");
+        program.link();
+
+        return program;
+    }
+
+    public Texture loadTexture(final String filename) {
+        final Texture texture = new Texture();
+
+        try {
+        	texture.load(battleCommander.getAssets().open(filename));
+        } catch(IOException e) {
+        	Log.e(TAG, "Resource not found", e);
+        	throw new RuntimeException(e);
         }
         
-        return programHandle;
+        return texture;
     }
 
-    public int loadTexture(final int resourceId) {
-        final int[] textureHandle = new int[1];
+    public Texture loadCompressedTexture(final String filename) {
+    	final Texture texture = new Texture();
 
-        glGenTextures(1, textureHandle, 0);
-
-        if (textureHandle[0] != 0) {
-            final BitmapFactory.Options options = new BitmapFactory.Options();
-            options.inScaled = false;   // No pre-scaling
-
-            final Bitmap bitmap = BitmapFactory.decodeResource(battleCommander.getResources(), resourceId, options);
-
-            glBindTexture(GL_TEXTURE_2D, textureHandle[0]);
-
-            //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-            GLUtils.texImage2D(GL_TEXTURE_2D, 0, bitmap, 0);
-            
-            glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
-            glGenerateMipmap(GL_TEXTURE_2D);
-
-            bitmap.recycle();
-        }
-
-        if (textureHandle[0] == 0) {
-        	Log.e(TAG, "loadTexture failed!");
-            throw new RuntimeException("Error loading texture.");
-        }
-
-        return textureHandle[0];
-    }
-
-    public int loadCompressedTexture(final String filename) {
-        final int[] textureHandle = new int[1];
-
-        glGenTextures(1, textureHandle, 0);
-
-        if (textureHandle[0] != 0) {
-            glBindTexture(GL_TEXTURE_2D, textureHandle[0]);
-
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-            try {
-	            InputStream input = battleCommander.getAssets().open(filename);
-	            ETC1Util.loadTexture(GL_TEXTURE_2D, 0, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, input);
-            } catch(IOException e) {
-            	textureHandle[0] = 0;
-            	Log.e(TAG, "ETC1Util.loadTexture failed!", e);
-            }
-            
-            //glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
-            //glGenerateMipmap(GL_TEXTURE_2D);
-        }
-
-        if (textureHandle[0] == 0) {
-        	Log.e(TAG, "loadTexture failed!");
-            throw new RuntimeException("Error loading texture.");
-        }
-
-        return textureHandle[0];
+    	try {
+        	texture.loadETC1(battleCommander.getAssets().open(filename));
+	    } catch(IOException e) {
+	    	Log.e(TAG, "Resource not found", e);
+	    	throw new RuntimeException(e);
+	    }
+        
+        return texture;
     }
 
     public String readTextFileFromRawResource(final int resourceId) {
@@ -287,7 +169,6 @@ public class OpenGLRenderer implements Renderer {
     @Override
     public void onSurfaceChanged(GL10 unused, int width, int height) {
         glViewport(0, 0, width, height);
-        
         Matrix.orthoM(projectionMatrix, 0, -(width/2), width/2, -(height/2), height/2, 0, 2);
     }
 
@@ -328,9 +209,9 @@ class Plane {
 
     private final ShortBuffer drawListBuffer;
 
-    private final int programHandle;
+    private final GLSLProgram program;
 
-    private final int textureHandle;
+    private final Texture texture;
 
     private final float[] modelViewProjectionMatrix = new float[16];
 
@@ -355,46 +236,28 @@ class Plane {
         drawListBuffer.put(drawOrder);
         drawListBuffer.position(0);
 
-        programHandle = openGLRenderer.createAndLinkProgram(R.raw.unshaded_vert, R.raw.unshaded_frag, new String[] {"a_Position"});//, "a_TexCoordinate"});
+        program = openGLRenderer.createProgram(R.raw.unshaded_vert, R.raw.unshaded_frag, new String[] {"a_Position"});//, "a_TexCoordinate"});
 
         //mTextureDataHandle = openGLRenderer.loadTexture(R.raw.map);
-        textureHandle = openGLRenderer.loadCompressedTexture("maps/beach/0/beach_0.pkm");
+        texture = openGLRenderer.loadCompressedTexture("maps/beach/0/beach_0.pkm");
 
         Matrix.setIdentityM(modelMatrix, 0);
         Matrix.scaleM(modelMatrix, 0, 512f, 512, 1f);
     }
 
     public void draw(float[] mVPMatrix) {
-        glUseProgram(programHandle);
-
+        program.use();
 
         Matrix.multiplyMM(modelViewProjectionMatrix, 0, mVPMatrix, 0, modelMatrix, 0);
 
-        int modelViewProjectionMatrixHandle = glGetUniformLocation(programHandle, "modelViewProjection");
-        glUniformMatrix4fv(modelViewProjectionMatrixHandle, 1, false, modelViewProjectionMatrix, 0);
-
-
-        int vertexHandle = glGetAttribLocation(programHandle, "vertex");
-        glEnableVertexAttribArray(vertexHandle);
-        glVertexAttribPointer(vertexHandle, 3, GL_FLOAT, false, 0, vertexBuffer);
-
-
-        int texCoordHandle = glGetAttribLocation(programHandle, "texCoord");
-        glEnableVertexAttribArray(texCoordHandle);
-        glVertexAttribPointer(texCoordHandle, 2, GL_FLOAT, false, 0, textureCoordsBuffer);
-
-
-        int textureUniformHandle = glGetUniformLocation(programHandle, "texture");
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureHandle);
-        glUniform1i(textureUniformHandle, 0);
-
-
+        program.setUniform("modelViewProjection", modelViewProjectionMatrix);
+        program.setAttribute("vertex", 3, vertexBuffer);
+        program.setAttribute("texCoord", 2, textureCoordsBuffer);
+        program.setTextureUniform("texture", GL_TEXTURE0, texture);
+        
         glDrawElements(GL_TRIANGLES, drawOrder.length, GL_UNSIGNED_SHORT, drawListBuffer);
 
-
-        glDisableVertexAttribArray(vertexHandle);
-        glDisableVertexAttribArray(texCoordHandle);
+        program.disable();
     }
 
 }
